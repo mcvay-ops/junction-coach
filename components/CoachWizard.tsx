@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, RefreshCw } from "lucide-react";
 import type { CoachInputs, Taxonomy } from "@/lib/types";
 import { buildCoachOutput, buildSteps, fillInputs } from "@/lib/coach";
 import { CoachOutputView } from "./CoachOutput";
-import { ProgressBar, SelectedInputs } from "./CoachWizardParts";
+import { SelectedInputs, StepNav } from "./CoachWizardParts";
 
 export function CoachWizard({ taxonomy }: { taxonomy: Taxonomy }) {
   const [inputs, setInputs] = useState<Partial<CoachInputs>>({});
@@ -13,13 +13,14 @@ export function CoachWizard({ taxonomy }: { taxonomy: Taxonomy }) {
   const [done, setDone] = useState(false);
 
   const steps = useMemo(() => buildSteps(inputs.use_case), [inputs.use_case]);
-  const current = steps[stepIdx];
+  const safeStepIdx = Math.min(stepIdx, steps.length - 1);
+  const current = steps[safeStepIdx];
   const totalSteps = steps.length;
 
   const select = (value: string) => {
     if (!current) return;
     const next: Partial<CoachInputs> = { ...inputs, [current.key]: value };
-    if (current.key === "use_case") {
+    if (current.key === "use_case" && value !== inputs.use_case) {
       delete next.modality;
       delete next.integration_pattern;
     }
@@ -30,8 +31,8 @@ export function CoachWizard({ taxonomy }: { taxonomy: Taxonomy }) {
     current && (inputs as Record<string, unknown>)[current.key] !== undefined;
 
   const handleNext = () => {
-    if (stepIdx < totalSteps - 1) {
-      setStepIdx((i) => i + 1);
+    if (safeStepIdx < totalSteps - 1) {
+      setStepIdx(safeStepIdx + 1);
     } else {
       setDone(true);
     }
@@ -42,7 +43,13 @@ export function CoachWizard({ taxonomy }: { taxonomy: Taxonomy }) {
       setDone(false);
       return;
     }
-    setStepIdx((i) => Math.max(0, i - 1));
+    setStepIdx(Math.max(0, safeStepIdx - 1));
+  };
+
+  const jumpTo = (idx: number) => {
+    const target = Math.max(0, Math.min(idx, steps.length - 1));
+    setStepIdx(target);
+    setDone(false);
   };
 
   const reset = () => {
@@ -56,26 +63,43 @@ export function CoachWizard({ taxonomy }: { taxonomy: Taxonomy }) {
     const output = buildCoachOutput(filled, taxonomy);
     return (
       <div>
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <StepNav
+          steps={steps}
+          currentIdx={safeStepIdx}
+          inputs={inputs}
+          onJump={jumpTo}
+          done
+        />
+        <div className="mt-4 mb-4 flex flex-wrap items-center gap-2">
           <button onClick={handleBack} className="btn-ghost">
             <ArrowLeft size={14} /> Edit inputs
           </button>
           <button onClick={reset} className="btn-ghost">
             <RefreshCw size={14} /> Start over
           </button>
-          <SelectedInputs inputs={filled} />
+          <SelectedInputs inputs={filled} steps={steps} onJump={jumpTo} />
         </div>
-        <CoachOutputView output={output} />
+        <CoachOutputView output={output} inputs={filled} />
       </div>
     );
   }
 
   return (
     <div>
-      <ProgressBar current={stepIdx + 1} total={totalSteps} />
+      <StepNav
+        steps={steps}
+        currentIdx={safeStepIdx}
+        inputs={inputs}
+        onJump={jumpTo}
+      />
+      {Object.keys(inputs).length > 0 && (
+        <div className="mt-3">
+          <SelectedInputs inputs={inputs} steps={steps} onJump={jumpTo} />
+        </div>
+      )}
       <div className="card mt-4">
         <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-accent">
-          Step {stepIdx + 1} of {totalSteps}
+          Step {safeStepIdx + 1} of {totalSteps}
         </p>
         <h2 className="mb-4 text-xl font-semibold tracking-tight">{current?.question}</h2>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -99,11 +123,11 @@ export function CoachWizard({ taxonomy }: { taxonomy: Taxonomy }) {
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between">
-        <button onClick={handleBack} disabled={stepIdx === 0} className="btn-ghost">
+        <button onClick={handleBack} disabled={safeStepIdx === 0} className="btn-ghost">
           <ArrowLeft size={14} /> Back
         </button>
         <button onClick={handleNext} disabled={!canAdvance} className="btn">
-          {stepIdx === totalSteps - 1 ? "See recommendation" : "Next"}
+          {safeStepIdx === totalSteps - 1 ? "See recommendation" : "Next"}
           <ArrowRight size={14} />
         </button>
       </div>
