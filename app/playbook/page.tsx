@@ -2,7 +2,7 @@ import { PlaybookReader } from "@/components/PlaybookReader";
 import { getPlaybook, getQuestions } from "@/lib/content";
 
 export const metadata = {
-  title: "SE Playbook — junction-coach",
+  title: "SE Playbook",
   description:
     "Internal SE playbook for the same 25 questions: direct answer, qualifying questions, P0/P1/P2 escalation, and follow-up template.",
 };

@@ -2,10 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://junction-coach.vercel.app";
+const description =
+  "Solutions Engineering artifact for Junction: Question Bank, Integration Coach, and SE Playbook for the top 25 pre-sales technical questions, sourced from docs.junction.com and the Junction handbook.";
+
 export const metadata: Metadata = {
-  title: "junction-coach",
-  description:
-    "A Solutions Engineering artifact for Junction: Question Bank, Integration Coach, and SE Playbook for the top pre-sales technical questions.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "junction-coach",
+    template: "%s | junction-coach",
+  },
+  description,
+  openGraph: {
+    title: "junction-coach",
+    description,
+    url: siteUrl,
+    siteName: "junction-coach",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "junction-coach",
+    description,
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({

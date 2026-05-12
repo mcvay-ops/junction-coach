@@ -1,12 +1,17 @@
 # junction-coach
 
+**Role success metric:** drop Product time on external technical calls below 10%.
+
+This artifact is the lever. Three surfaces (Question Bank, Integration Coach, SE Playbook) that let a prospect, an AE, or an SE answer the top 25 pre-sales technical questions without paging Product.
+
 > *"Communication between humans is like bad APIs. Imagine our customers had to call us every time they wanted a lab order to go through our system. A better API is one with no humans in the loop."*
-> — Junction team handbook
+> Junction team handbook
 
-The Senior SE role's success metric (drop Product time on external technical calls below 10%) is the same problem the handbook frames above. `junction-coach` is the API.
-
-**Live URL:** _add Vercel URL once deployed_
-**Loom walkthrough (3 min):** _add Loom URL once recorded_
+| | |
+|---|---|
+| **Live URL** | https://junction-coach.vercel.app (placeholder, update after first deploy) |
+| **Loom walkthrough (3 min)** | (placeholder, update after recording) |
+| **Repo** | https://github.com/mcvay-ops/junction-coach |
 
 ---
 
@@ -14,9 +19,9 @@ The Senior SE role's success metric (drop Product time on external technical cal
 
 A content-driven Solutions Engineering artifact, built as a single Next.js app. Three surfaces:
 
-1. **Question Bank** (`/questions`) — 25 of the most common pre-sales technical questions, every answer sourced from `docs.junction.com` or `pages.junction.com/handbook`. Topic filters, full-text search, deep-linkable entry ids.
-2. **Integration Coach** (`/coach`) — six-question wizard. Inputs: use case, modality, region, integration pattern, delivery, compliance. Output: tailored architecture diagram (Mermaid), curl snippets, recommended SDK, compliance checklist, gotchas.
-3. **SE Playbook** (`/playbook`) — the same 25 questions, framed for the SE on a live call. Direct answer, qualifying questions, P0/P1/P2 escalation criteria, follow-up note template.
+1. **Question Bank** (`/questions`). 25 of the most common pre-sales technical questions, every answer sourced from `docs.junction.com` or `pages.junction.com/handbook`. Topic filters, full-text search, deep-linkable entry ids.
+2. **Integration Coach** (`/coach`). Six-question wizard. Inputs: use case, modality, region, integration pattern, delivery, compliance. Output: tailored architecture diagram (Mermaid), curl snippets, recommended SDK, compliance checklist, gotchas.
+3. **SE Playbook** (`/playbook`). The same 25 questions, framed for the SE on a live call. Direct answer, qualifying questions, P0/P1/P2 escalation criteria, follow-up note template.
 
 ## Screenshots
 
@@ -62,6 +67,17 @@ content/
 ├── taxonomy.yaml    # Coach decision tree (12 leaves)
 └── playbook.yaml    # 25 SE playbook entries
 ```
+
+## Deploy
+
+Vercel, zero config. From the repo root:
+
+1. Push the branch to GitHub.
+2. In Vercel, **Add New → Project**, import `mcvay-ops/junction-coach`, accept all defaults (framework auto-detects as Next.js).
+3. Optional: set `NEXT_PUBLIC_SITE_URL` to the assigned production URL so Open Graph and Twitter card links resolve absolutely. Without it, the layout falls back to `https://junction-coach.vercel.app`.
+4. Once deployed, replace the **Live URL** row at the top of this README and embed the Loom.
+
+Build command: `next build`. Output: static + edge (OG image is rendered at the edge by `next/og`).
 
 ## Voice rules (`lib/voice.md`)
 
