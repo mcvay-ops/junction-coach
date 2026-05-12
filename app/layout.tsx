@@ -3,18 +3,19 @@ import Link from "next/link";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://junction-coach.vercel.app";
+const title = "junction-coach. Built to keep Product off external technical calls.";
 const description =
-  "Solutions Engineering artifact for Junction: Question Bank, Integration Coach, and SE Playbook for the top 25 pre-sales technical questions, sourced from docs.junction.com and the Junction handbook.";
+  "A Solutions Engineering artifact for Junction. Three surfaces (Question Bank, Integration Coach, SE Playbook) sourced from docs.junction.com and the team handbook.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "junction-coach",
+    default: title,
     template: "%s | junction-coach",
   },
   description,
   openGraph: {
-    title: "junction-coach",
+    title,
     description,
     url: siteUrl,
     siteName: "junction-coach",
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "junction-coach",
+    title,
     description,
   },
   robots: { index: true, follow: true },
@@ -56,8 +57,31 @@ export default function RootLayout({
         </header>
         <main>{children}</main>
         <footer className="mt-12 border-t border-ink-200 py-6 text-center text-xs text-ink-500 dark:border-ink-800">
-          <div className="container-page">
-            Built by Jordan McVay as an SE artifact. Sourced from docs.junction.com and the Junction handbook. No PHI, no live API calls.
+          <div className="container-page flex flex-col items-center gap-1">
+            <p>Built by Jordan McVay. Sandbox only. No PHI. No live API calls.</p>
+            <p className="flex flex-wrap items-center justify-center gap-x-2">
+              <a
+                href="https://linkedin.com/in/jordan-mcvay"
+                className="hover:text-accent"
+                target="_blank"
+                rel="noreferrer"
+              >
+                LinkedIn
+              </a>
+              <span aria-hidden="true">·</span>
+              <a
+                href="https://github.com/mcvay-ops"
+                className="hover:text-accent"
+                target="_blank"
+                rel="noreferrer"
+              >
+                GitHub
+              </a>
+              <span aria-hidden="true">·</span>
+              <a href="mailto:mcvay.jordan@gmail.com" className="hover:text-accent">
+                mcvay.jordan@gmail.com
+              </a>
+            </p>
           </div>
         </footer>
       </body>
