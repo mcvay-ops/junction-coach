@@ -8,7 +8,7 @@ const cards = [
     blurb:
       "25 of the most common pre-sales technical questions, answered with sources. Filter by topic, search by phrase, deep-link any entry.",
     icon: BookOpen,
-    eyebrow: "Read",
+    eyebrow: "Removes calls",
   },
   {
     href: "/coach",
@@ -16,15 +16,15 @@ const cards = [
     blurb:
       "Guided wizard. Pick a use case, modality, region, integration pattern, and compliance needs. Get a tailored architecture, curl snippets, SDK pick, and checklist.",
     icon: Compass,
-    eyebrow: "Replace a call",
+    eyebrow: "Replaces calls",
   },
   {
     href: "/playbook",
     title: "SE Playbook",
     blurb:
-      "Same 25 questions, framed for the SE on a live call. Direct answer, qualifying questions, P0/P1/P2 escalation criteria, and a follow-up note template.",
+      "The same 25 questions framed for the SE on a live call. Direct answer, qualifying questions, P0 / P1 / P2 escalation criteria, and a follow-up note template.",
     icon: ListChecks,
-    eyebrow: "Run a call",
+    eyebrow: "Runs calls",
   },
 ];
 
@@ -33,14 +33,17 @@ export default function Page() {
     <div className="container-page">
       <section className="mb-10 md:mb-14">
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-accent">
-          Solutions Engineering artifact
+          A Solutions Engineering artifact for Junction.
         </p>
         <h1 className="mb-4 text-3xl font-semibold tracking-tight md:text-5xl">
-          A better API is one with no humans in the loop.
+          Built to keep Product off external technical calls.
         </h1>
         <p className="max-w-2xl text-base text-ink-600 dark:text-ink-300 md:text-lg">
-          The Junction handbook frames it best. The Senior SE success metric (drop Product time on external technical calls below 10%) is the same problem.
-          This is the API: a Question Bank, a Coach, and a Playbook, sourced from docs.junction.com and the team handbook.
+          The Junction handbook frames the role&apos;s success metric in its own voice:{" "}
+          <em>
+            &ldquo;Communication between humans is like bad APIs. A better API is one with no humans in the loop.&rdquo;
+          </em>{" "}
+          This is that API. Three surfaces, sourced from docs.junction.com and the team handbook.
         </p>
       </section>
 
@@ -63,14 +66,14 @@ export default function Page() {
       </section>
 
       <section className="mt-12 rounded-xl border border-ink-200 bg-ink-50 p-5 text-sm leading-relaxed text-ink-700 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-200">
-        <p className="mb-2 font-semibold">What this claims, and does not claim.</p>
+        <p className="mb-2 font-semibold">Scope</p>
         <p className="mb-2">
-          Every fact is verifiable against docs.junction.com or the Junction handbook. Every entry links a source. The Coach renders sandbox-shaped curl
+          Every fact verifies against docs.junction.com or the Junction handbook. Every entry links its source. The Coach renders sandbox-shaped curl
           and SDK snippets so a reviewer can read them, not run them.
         </p>
         <p>
-          What it does not claim: working calls against the live Junction API, working webhook delivery, or a production-grade integration. This is a content
-          artifact, optimized for the role's success metric.
+          This is not a working integration against the live Junction API, not a webhook receiver, and not a production-grade demo. It is a content
+          artifact, optimized for one outcome: the role&apos;s success metric.
         </p>
       </section>
     </div>
