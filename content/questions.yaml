@@ -1,0 +1,231 @@
+questions:
+  # ---------- AUTH (4) ----------
+  - id: auth-1
+    topic: auth
+    question: "Which Junction API key do I use to manage organizations and teams vs. read user health data?"
+    answer: >
+      Use the Org Management API for control-plane operations (creating teams, rotating keys, setting brand info, configuring webhooks). Use the Vital API for application-plane operations (creating users, pulling wearables data, ordering labs, reading results). The keys are scoped separately on purpose. If your code is reading a user's heart rate, it is on the Vital API; if it is changing your company's display name, it is on the Org Management API.
+    sourceUrl: "https://docs.junction.com/api-details/junction-api"
+    sourceLabel: "docs.junction.com / API details"
+    related: [auth-2, arch-1, arch-2]
+
+  - id: auth-2
+    topic: auth
+    question: "Sandbox vs. production keys — what is safe to put on the client?"
+    answer: >
+      Neither. All Junction API keys belong on a server you control. Sandbox keys are still secrets; they just hit non-production data and a non-PHI environment. For browser-side flows like the Link Widget, the client receives a short-lived link token, not the API key. The Mobile SDK follows the same pattern. If a key would ever sit in a bundle that ships to a phone or a browser, the integration is wrong.
+    sourceUrl: "https://docs.junction.com/home/quickstart"
+    sourceLabel: "docs.junction.com / Quickstart"
+    related: [auth-1, arch-3, wear-1]
+
+  - id: auth-3
+    topic: auth
+    question: "How do I rotate an API key without downtime?"
+    answer: >
+      Issue a new key in the Org Management API, deploy it to your servers alongside the old one, switch traffic, then revoke the old key. Junction supports overlapping active keys for exactly this reason. Treat key rotation as a deploy, not a one-shot click; the worst case is revoking a key that a stale pod still holds.
+    sourceUrl: "https://docs.junction.com/api-details/junction-management-api"
+    sourceLabel: "docs.junction.com / Org Management API"
+    related: [auth-1, comp-1]
+
+  - id: auth-4
+    topic: auth
+    question: "Region routing — does my Vital API key work in both US and EU?"
+    answer: >
+      No. Keys, base URLs, and data are region-scoped. US users live in the US region; EU users live in the EU region. Pick the region at organization creation and route your traffic to the matching base URL. For multi-region products, you operate two integrations (two key sets, two base URLs, two webhook endpoints) and your application layer decides which one a given user belongs to.
+    sourceUrl: "https://docs.junction.com/home/quickstart"
+    sourceLabel: "docs.junction.com / Quickstart"
+    related: [arch-2, web-1]
+
+  # ---------- WEBHOOKS (6) ----------
+  - id: web-1
+    topic: webhooks
+    question: "What counts as a successful webhook delivery?"
+    answer: >
+      Any 2xx response from your endpoint inside the timeout window. Junction does not look at the response body; the status code is the contract. If your handler needs to do real work, do it after acknowledging (queue the payload and return 2xx, then process). A 2xx after slow work is still treated as success, but slow handlers risk timeouts and unnecessary retries.
+    sourceUrl: "https://docs.junction.com/webhooks/retry-policy"
+    sourceLabel: "docs.junction.com / Webhooks / Retry policy"
+    related: [web-2, web-3, web-6]
+
+  - id: web-2
+    topic: webhooks
+    question: "What is the webhook retry policy, exactly?"
+    answer: >
+      Non-2xx responses and timeouts trigger retries on an exponential backoff schedule, with a bounded number of attempts before the event is parked. Once parked, you can replay from the dashboard or via the Org Management API. Build your handler to be idempotent (use the event id as the dedupe key), because a retry will fire on transient errors that already mutated state on your side.
+    sourceUrl: "https://docs.junction.com/webhooks/retry-policy"
+    sourceLabel: "docs.junction.com / Webhooks / Retry policy"
+    related: [web-1, web-3, web-5]
+
+  - id: web-3
+    topic: webhooks
+    question: "How do I make my webhook handler idempotent?"
+    answer: >
+      Treat the event id as the primary key for a dedupe table or a Redis SETNX. On receipt, attempt to insert the id; if you collide, return 200 immediately without re-processing. Idempotency belongs at the boundary of your handler, before any side effects. The retry policy guarantees you will see duplicates at some point, especially during your own deploys and incidents.
+    sourceUrl: "https://docs.junction.com/webhooks/introduction"
+    sourceLabel: "docs.junction.com / Webhooks / Introduction"
+    related: [web-2, web-1]
+
+  - id: web-4
+    topic: webhooks
+    question: "When should I use webhooks vs. an ETL pipeline (Pub/Sub, RabbitMQ, Event Hubs)?"
+    answer: >
+      Use webhooks for low-volume, low-latency events where you control the receiving endpoint and the operational cost is small. Use Junction's ETL pipelines when you want managed delivery into your existing message bus (Google Pub/Sub, RabbitMQ, Azure Event Hubs), you have high event volume, or you do not want to operate a public HTTPS endpoint. ETL trades a small amount of latency for managed throughput and the same retry guarantees.
+    sourceUrl: "https://docs.junction.com/webhooks/etl-pipelines/overview"
+    sourceLabel: "docs.junction.com / Webhooks / ETL pipelines"
+    related: [web-1, arch-1]
+
+  - id: web-5
+    topic: webhooks
+    question: "How do I handle a partial lab result notification?"
+    answer: >
+      Treat a partial result as a state transition, not a final answer. Store the partial, surface it to the user with explicit labeling, and wait for the final-results event before triggering any downstream workflow (clinician review, follow-up order). The id stays the same across partial and final; subscribe to both events and let the most recent one win.
+    sourceUrl: "https://docs.junction.com/lab/workflow/partials"
+    sourceLabel: "docs.junction.com / Lab / Workflow / Partials"
+    related: [labs-3, labs-4, web-3]
+
+  - id: web-6
+    topic: webhooks
+    question: "Why am I getting duplicate webhook deliveries even though I returned 200?"
+    answer: >
+      Usually one of three causes. First, the 200 returned after the timeout window; from Junction's side the request failed. Second, you returned 200 from a load balancer before the application processed; the application later failed and was retried at a higher layer. Third, you have multiple subscriptions to the same event type. Add timestamps to your logs, inspect retry attempts in the dashboard, and confirm only one webhook endpoint is subscribed per event.
+    sourceUrl: "https://docs.junction.com/webhooks/retry-policy"
+    sourceLabel: "docs.junction.com / Webhooks / Retry policy"
+    related: [web-1, web-2, web-3]
+
+  # ---------- WEARABLES (4) ----------
+  - id: wear-1
+    topic: wearables
+    question: "Link Widget vs. Apple HealthKit — when do I use which?"
+    answer: >
+      Use the Link Widget for browser-based or web-app flows where users connect cloud providers (Fitbit, Garmin, Oura, Whoop, Withings). Use Apple HealthKit when you have a native iOS app and want on-device data without depending on a third-party cloud. HealthKit requires the Junction Mobile SDK; you cannot pull HealthKit data through the Link Widget. If your product ships an iOS app and your customers ask for Apple Watch coverage, you need both: Link Widget for cloud providers, Mobile SDK plus HealthKit for on-device.
+    sourceUrl: "https://docs.junction.com/wearables/guides/apple-healthkit"
+    sourceLabel: "docs.junction.com / Wearables / Apple HealthKit"
+    related: [wear-2, wear-3, arch-3]
+
+  - id: wear-2
+    topic: wearables
+    question: "Custom Link API — when do I skip the widget?"
+    answer: >
+      When you need full control over the connection UI, want to A/B test the flow, or have a native experience that the hosted widget cannot match. The Custom Link API gives you the OAuth handshake and connection state primitives without the rendered widget. The cost is that you now own the UI, the error states, and the provider-specific copy. Default to the widget; reach for the Custom Link API only when there is a concrete UX requirement the widget cannot meet.
+    sourceUrl: "https://docs.junction.com/wearables/connecting-providers/introduction"
+    sourceLabel: "docs.junction.com / Wearables / Connecting providers"
+    related: [wear-1, wear-3]
+
+  - id: wear-3
+    topic: wearables
+    question: "What providers are supported and which data types vary by provider?"
+    answer: >
+      Junction supports the major cloud providers (Fitbit, Garmin, Oura, Whoop, Withings, Polar) plus Apple HealthKit and Google Health Connect via the Mobile SDK. Data type coverage is provider-dependent; not every provider returns sleep stages, HRV, or workout details. Check the provider matrix in the docs before promising a specific data point to a customer, and design your reporting to degrade gracefully when a metric is unavailable.
+    sourceUrl: "https://docs.junction.com/wearables/connecting-providers/introduction"
+    sourceLabel: "docs.junction.com / Wearables / Connecting providers"
+    related: [wear-1, wear-2]
+
+  - id: wear-4
+    topic: wearables
+    question: "Historical backfill — how far back does a new connection pull?"
+    answer: >
+      Provider-dependent. Most cloud providers return 30 to 90 days of history at connection time; some (Whoop, Oura) return more, some less. Apple HealthKit can return years if the user has been recording on-device. Treat the backfill window as a feature your roadmap depends on, not a constant; confirm against the docs per provider and surface the limit to end users so they understand what they will see on day one.
+    sourceUrl: "https://docs.junction.com/wearables/connecting-providers/introduction"
+    sourceLabel: "docs.junction.com / Wearables / Connecting providers"
+    related: [wear-3, arch-1]
+
+  # ---------- LABS (5) ----------
+  - id: labs-1
+    topic: labs
+    question: "In-person vs. at-home vs. mobile phlebotomy — how do I choose a lab modality?"
+    answer: >
+      Map it to your user experience. In-person patient service centers (Quest, LabCorp) are the cheapest and broadest panel coverage; users travel to a draw site. At-home self-collection kits ship to the user and back; coverage is narrower (mostly blood spot, saliva, urine). Mobile phlebotomy sends a phlebotomist to the user's address; coverage is similar to in-person but at a premium price. Most products start with one modality and add a second when a customer cohort blocks on it.
+    sourceUrl: "https://docs.junction.com/lab/overview/introduction"
+    sourceLabel: "docs.junction.com / Lab / Overview"
+    related: [labs-2, labs-5]
+
+  - id: labs-2
+    topic: labs
+    question: "How do I cancel a lab order — DELETE or POST cancel?"
+    answer: >
+      POST a cancellation action. Cancellation is a Custom RPC in Junction's API design, not a DELETE. The handbook is explicit on this: DELETE is reserved for removing resources; canceling an order is a state transition with side effects (notifying the lab, refunding the user, recording an audit event). The endpoint is shaped like `POST /orders/{id}/cancel`, and the response tells you whether the cancellation succeeded or whether the order had already moved past the cancelable state.
+    sourceUrl: "https://pages.junction.com/handbook/api-design-guidelines"
+    sourceLabel: "Junction handbook / API design guidelines"
+    related: [labs-3, arch-2]
+
+  - id: labs-3
+    topic: labs
+    question: "What is the order lifecycle — from creation to final results?"
+    answer: >
+      Created → accepted by lab → sample collected → received by lab → in process → resulted (possibly partial first, then final). Each transition emits a webhook event. Build your UI around states, not booleans; "ordered" is not "resulted," and "partial" is not "final." The most common SE call is the engineer who is checking `status == 'resulted'` and missing partial-result events for weeks.
+    sourceUrl: "https://docs.junction.com/lab/overview/introduction"
+    sourceLabel: "docs.junction.com / Lab / Overview"
+    related: [labs-4, web-5, web-1]
+
+  - id: labs-4
+    topic: labs
+    question: "How are biomarker results normalized across labs?"
+    answer: >
+      Junction maps each lab's vendor-specific marker codes to a normalized identifier (LOINC plus Junction's own identifier when needed), with unit conversion to a canonical unit per marker. You receive both the raw vendor result and the normalized result. Use the normalized result for analytics and comparisons across labs; use the raw result for clinician hand-off when the customer wants the original report.
+    sourceUrl: "https://docs.junction.com/lab/overview/introduction"
+    sourceLabel: "docs.junction.com / Lab / Overview"
+    related: [labs-3, comp-2]
+
+  - id: labs-5
+    topic: labs
+    question: "Can I bring my own lab (BYOL)?"
+    answer: >
+      For most use cases, no — Junction's value is a managed lab network. For enterprise customers with an existing reference lab relationship, ask your AE to scope a custom integration; Junction has done these before but they are not self-serve. If you need full BYOL on day one, raise it during evaluation, not after contract signing.
+    sourceUrl: "https://docs.junction.com/lab/overview/introduction"
+    sourceLabel: "docs.junction.com / Lab / Overview"
+    related: [labs-1, arch-3]
+
+  # ---------- COMPLIANCE (3) ----------
+  - id: comp-1
+    topic: compliance
+    question: "What does Junction's BAA cover and when does it get signed?"
+    answer: >
+      Junction signs a Business Associate Agreement for customers handling PHI in production. The BAA covers Junction's processing of PHI on the customer's behalf as a Business Associate under HIPAA. In sandbox, no PHI is permitted, so no BAA is required to start building. The BAA is typically signed alongside the production contract, not during evaluation.
+    sourceUrl: "https://pages.junction.com/handbook/vision-and-mission"
+    sourceLabel: "Junction handbook"
+    related: [comp-2, comp-3, auth-2]
+
+  - id: comp-2
+    topic: compliance
+    question: "HIPAA, SOC 2 — what does Junction hold, and what is the customer's responsibility?"
+    answer: >
+      Junction maintains HIPAA compliance and SOC 2 Type II. The customer remains responsible for their own application: how PHI is displayed, who has access, audit logging on their side, and the security of the API keys they hold. A common misread is "Junction is HIPAA, so we are HIPAA." That is not how shared responsibility works; Junction covers the infrastructure and data handling between Junction and the labs/providers, the customer covers everything in their app.
+    sourceUrl: "https://pages.junction.com/handbook/vision-and-mission"
+    sourceLabel: "Junction handbook"
+    related: [comp-1, comp-3]
+
+  - id: comp-3
+    topic: compliance
+    question: "What data leaves the region (US/EU) and what stays?"
+    answer: >
+      User health data stays in the region of the organization that owns the user. Operational metadata (account-level audit, billing, support tooling) may transit between regions in narrow, documented cases. If you have a data residency requirement from a customer, the right answer is "the user's PHI stays in their region; here is the docs page describing the exceptions," not a blanket "all data stays."
+    sourceUrl: "https://docs.junction.com/home/quickstart"
+    sourceLabel: "docs.junction.com / Quickstart"
+    related: [comp-1, auth-4]
+
+  # ---------- ARCHITECTURE (3) ----------
+  - id: arch-1
+    topic: architecture
+    question: "Org → Team → User → Order — how does the hierarchy map to my product?"
+    answer: >
+      Org is your company. Team is a logical grouping inside the org (often per environment, per business unit, or per product line) and is where API keys, webhooks, and brand settings attach. User is the end-user whose data you read or whose orders you place. Order is a single lab or workflow request tied to a user. Most products have one org, one or two teams (sandbox + production), many users, and many orders per user. Plan your team structure early; moving users between teams is not the happy path.
+    sourceUrl: "https://docs.junction.com/api-details/junction-api"
+    sourceLabel: "docs.junction.com / API details"
+    related: [auth-1, arch-2]
+
+  - id: arch-2
+    topic: architecture
+    question: "Cursor vs. offset pagination — which does Junction use and why?"
+    answer: >
+      Cursor-based pagination for any endpoint that returns a feed of events or a growing dataset (user activity, orders, webhook deliveries). Offset pagination only for small, stable lists where the cost of a missed or duplicate row is zero. The handbook's API design guidelines are explicit: cursors are stable under concurrent writes, offsets are not. When in doubt, the endpoint returns a `next_cursor`; pass it back unchanged on the next call.
+    sourceUrl: "https://pages.junction.com/handbook/api-design-guidelines"
+    sourceLabel: "Junction handbook / API design guidelines"
+    related: [labs-3, web-4]
+
+  - id: arch-3
+    topic: architecture
+    question: "Mobile-first product — what is the minimum integration to ship?"
+    answer: >
+      Junction Mobile SDK on the client (iOS and Android), with your own backend holding the Junction API keys and acting as the proxy for any privileged calls. The Mobile SDK handles the Link flow, HealthKit / Health Connect permissions, and connection state. Your backend handles order creation, webhook receipt, and persistence. The shortest-path build is: Mobile SDK + one server endpoint that creates users and orders + one webhook receiver for results.
+    sourceUrl: "https://docs.junction.com/wearables/guides/apple-healthkit"
+    sourceLabel: "docs.junction.com / Wearables / Apple HealthKit"
+    related: [wear-1, auth-2, arch-1]
