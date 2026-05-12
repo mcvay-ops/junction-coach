@@ -3,9 +3,9 @@ import Link from "next/link";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://junction-coach.vercel.app";
-const title = "junction-coach — Built to keep Product off external technical calls";
+const title = "junction-coach. Built to keep Product off external technical calls.";
 const description =
-  "A Solutions Engineering artifact for Junction. Three surfaces — Question Bank, Integration Coach, SE Playbook — sourced from docs.junction.com and the team handbook.";
+  "A Solutions Engineering artifact for Junction. Three surfaces (Question Bank, Integration Coach, SE Playbook) sourced from docs.junction.com and the team handbook.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
