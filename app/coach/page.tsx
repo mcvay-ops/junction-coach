@@ -2,7 +2,7 @@ import { CoachWizard } from "@/components/CoachWizard";
 import { getTaxonomy } from "@/lib/content";
 
 export const metadata = {
-  title: "Integration Coach — junction-coach",
+  title: "Integration Coach",
   description:
     "Guided wizard that turns prospect inputs into a tailored Junction integration architecture, curl snippets, SDK pick, and compliance checklist.",
 };
@@ -19,7 +19,7 @@ export default function CoachPage() {
           Replace the architecture call.
         </h1>
         <p className="max-w-2xl text-sm text-ink-600 dark:text-ink-300">
-          Six questions. One tailored output: architecture diagram, curl snippets, recommended SDK, compliance checklist, and gotchas — drawn from the same taxonomy I would walk a prospect through on a call.
+          Six questions. One tailored output: architecture diagram, curl snippets, recommended SDK, compliance checklist, and gotchas, drawn from the same taxonomy I would walk a prospect through on a call.
         </p>
       </header>
       <CoachWizard taxonomy={taxonomy} />

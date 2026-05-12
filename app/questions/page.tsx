@@ -2,7 +2,7 @@ import { QuestionList } from "@/components/QuestionList";
 import { getQuestions } from "@/lib/content";
 
 export const metadata = {
-  title: "Question Bank — junction-coach",
+  title: "Question Bank",
   description:
     "25 of the most common Junction pre-sales technical questions answered, sourced from docs.junction.com and the Junction handbook.",
 };
