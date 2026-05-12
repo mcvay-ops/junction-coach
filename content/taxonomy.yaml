@@ -1,0 +1,465 @@
+leaves:
+  # ---------- WEARABLES ONLY ----------
+  - id: wearables-link-us-webhooks-hipaa
+    match:
+      use_case: wearables
+      region: us
+      integration_pattern: link_widget
+      delivery: webhooks
+      compliance: hipaa
+    api_surface: vital_api
+    api_surface_note: >
+      Wearables data is application-plane. All connection and read calls are on the Vital API. Use the Org Management API only to create the team and configure the webhook endpoint.
+    recommended_sdk: "junction-node (server) + Junction Web SDK for the Link Widget"
+    mermaid_template: |
+      flowchart LR
+        U[End user / browser] -- "1. open widget" --> W[Link Widget]
+        W -- "2. connect provider" --> P[Fitbit / Oura / Whoop]
+        P -- "3. data ready" --> J[Junction Vital API]
+        J -- "4. webhook" --> B[Your backend]
+        B -- "5. store + render" --> U
+    curl_snippets:
+      - label: "Create a user (server-side)"
+        code: |
+          curl -X POST https://api.junction.com/v1/users \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"client_user_id": "user_42", "region": "us"}'
+      - label: "Mint a link token for the widget"
+        code: |
+          curl -X POST https://api.junction.com/v1/link/token \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"user_id": "$USER_ID", "providers": ["fitbit","oura","whoop"]}'
+    compliance_checklist:
+      - "Sandbox: no PHI permitted, no BAA required to start."
+      - "Production: HIPAA workflow standard. Confirm BAA scope with the AE before signing."
+      - "Store API keys in your secrets manager. Never bundle in a web or mobile build."
+    gotchas:
+      - "The widget returns control to your app before data is ready. Wait on the webhook, not the widget close event."
+      - "Backfill window varies by provider; surface the date range in the UI so users do not expect last year."
+      - "Returning 200 from a CDN edge before your handler ran will silently drop events."
+
+  - id: wearables-mobile-us-webhooks-hipaa
+    match:
+      use_case: wearables
+      region: us
+      integration_pattern: mobile_sdk
+      delivery: webhooks
+      compliance: hipaa
+    api_surface: vital_api
+    api_surface_note: >
+      Apple HealthKit and Google Health Connect require the Mobile SDK; you cannot pull on-device data through the Link Widget. The Vital API serves the connection state and the historical reads.
+    recommended_sdk: "junction-ios + junction-android (Mobile SDK), with junction-node on your backend"
+    mermaid_template: |
+      flowchart LR
+        A[iOS / Android app] -- "1. SDK connect" --> H[HealthKit / Health Connect]
+        A -- "2. token exchange" --> B[Your backend]
+        B -- "3. authorize" --> J[Junction Vital API]
+        J -- "4. webhook on new data" --> B
+        B -- "5. push update" --> A
+    curl_snippets:
+      - label: "Exchange SDK token for a Junction user session"
+        code: |
+          curl -X POST https://api.junction.com/v1/users/sdk-session \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"sdk_token": "$SDK_TOKEN"}'
+      - label: "Subscribe to wearable data webhooks"
+        code: |
+          curl -X POST https://api.junction.com/v1/webhooks \
+            -H "x-junction-mgmt-key: $JUNCTION_MGMT_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"url": "https://api.yourapp.com/junction/webhook","events": ["wearables.data.received"]}'
+    compliance_checklist:
+      - "HealthKit usage requires updated Apple privacy strings (NSHealthShareUsageDescription)."
+      - "Health Connect requires the user-facing permission strings declared in the Android manifest."
+      - "Sandbox: no PHI; use synthetic Apple Health data for demos."
+    gotchas:
+      - "HealthKit history can be years; rate-limit the initial sync or your backend will scale up unexpectedly."
+      - "Health Connect is Android-only; older Android versions need Google Fit fallback (separate setup)."
+      - "App Store review will reject Health* usage strings that say 'we collect your data'; describe the user benefit specifically."
+
+  - id: wearables-link-eu-etlpubsub-hipaa
+    match:
+      use_case: wearables
+      region: eu
+      integration_pattern: link_widget
+      delivery: etl_pubsub
+      compliance: hipaa
+    api_surface: vital_api
+    api_surface_note: >
+      EU traffic must hit the EU base URL with EU-region keys. The ETL pipeline (Pub/Sub) terminates in your GCP project; Junction does not cross regions.
+    recommended_sdk: "junction-node + Junction Web SDK; consumer service in GCP"
+    mermaid_template: |
+      flowchart LR
+        U[End user / browser] -- "1. open widget" --> W[Link Widget]
+        W -- "2. connect provider" --> P[Cloud providers]
+        P -- "3. data ready" --> J[Junction EU / Vital API]
+        J -- "4. publish" --> Q[Google Pub/Sub topic]
+        Q -- "5. consume" --> B[Your backend - EU]
+    curl_snippets:
+      - label: "Create an EU user"
+        code: |
+          curl -X POST https://api.eu.junction.com/v1/users \
+            -H "x-junction-api-key: $JUNCTION_API_KEY_EU" \
+            -H "Content-Type: application/json" \
+            -d '{"client_user_id": "user_42", "region": "eu"}'
+      - label: "Configure the Pub/Sub ETL destination"
+        code: |
+          curl -X POST https://api.eu.junction.com/v1/etl/destinations \
+            -H "x-junction-mgmt-key: $JUNCTION_MGMT_KEY_EU" \
+            -d '{"type": "google_pubsub","topic": "projects/your-proj/topics/junction"}'
+    compliance_checklist:
+      - "EU data residency: keys, base URL, and consumer all in EU."
+      - "Add GDPR data-processing addendum alongside the BAA equivalent."
+      - "Confirm your GCP project's region; cross-region Pub/Sub defeats residency."
+    gotchas:
+      - "Mixing US and EU keys in the same backend is the most common production incident."
+      - "Pub/Sub at-least-once delivery still requires idempotency on the event id."
+
+  # ---------- LABS ONLY ----------
+  - id: labs-inperson-us-webhooks-baa
+    match:
+      use_case: labs
+      modality: in_person
+      region: us
+      delivery: webhooks
+      compliance: hipaa_soc2_baa
+    api_surface: vital_api
+    api_surface_note: >
+      Lab ordering and results are on the Vital API. Patient service center selection is a sub-resource of the order.
+    recommended_sdk: "junction-node + Junction Web SDK for patient-facing scheduling"
+    mermaid_template: |
+      flowchart LR
+        U[Your app] -- "1. create order" --> J[Junction Vital API]
+        J -- "2. assign PSC" --> L[Quest / LabCorp]
+        L -- "3. sample collected" --> J
+        J -- "4. partial + final webhooks" --> B[Your backend]
+        B -- "5. render to user" --> U
+    curl_snippets:
+      - label: "Create a lab order at a patient service center"
+        code: |
+          curl -X POST https://api.junction.com/v1/order \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"user_id":"$USER_ID","panel":"lipid_panel","fulfillment":"psc","region":"us"}'
+      - label: "Cancel an order (POST, not DELETE)"
+        code: |
+          curl -X POST https://api.junction.com/v1/order/$ORDER_ID/cancel \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"reason":"user_requested"}'
+    compliance_checklist:
+      - "BAA signed before any PHI moves in production."
+      - "Internal audit log for every order state transition."
+      - "Map normalized results to your clinical UI; keep raw for clinician hand-off."
+    gotchas:
+      - "Cancellation is POST /cancel, never DELETE. DELETE will 405."
+      - "Build your UI around order states, not a single boolean 'done'."
+      - "Partial-result events fire first for multi-marker panels; final fires later."
+
+  - id: labs-athome-us-etlrabbit-hipaa
+    match:
+      use_case: labs
+      modality: at_home
+      region: us
+      delivery: etl_rabbitmq
+      compliance: hipaa
+    api_surface: vital_api
+    api_surface_note: >
+      At-home kit fulfillment uses the same Vital API order surface. The ETL pipeline writes lifecycle events to your RabbitMQ exchange.
+    recommended_sdk: "junction-node + RabbitMQ consumer (any language)"
+    mermaid_template: |
+      flowchart LR
+        U[Your app] -- "1. create at-home order" --> J[Junction Vital API]
+        J -- "2. ship kit" --> K[Carrier]
+        K -- "3. user collects + returns" --> L[Lab partner]
+        L -- "4. results" --> J
+        J -- "5. publish event" --> R[RabbitMQ exchange]
+        R -- "6. consume" --> B[Your backend]
+    curl_snippets:
+      - label: "Create an at-home order"
+        code: |
+          curl -X POST https://api.junction.com/v1/order \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"user_id":"$USER_ID","panel":"hba1c","fulfillment":"at_home_kit"}'
+      - label: "Configure the RabbitMQ ETL destination"
+        code: |
+          curl -X POST https://api.junction.com/v1/etl/destinations \
+            -H "x-junction-mgmt-key: $JUNCTION_MGMT_KEY" \
+            -d '{"type":"rabbitmq","uri":"amqps://...","exchange":"junction"}'
+    compliance_checklist:
+      - "Confirm shipping windows and address requirements before order creation."
+      - "Render kit-status states to the user; carriers can stall for days without notice."
+      - "Idempotency on the event id; RabbitMQ delivery is at-least-once."
+    gotchas:
+      - "At-home coverage is narrower than PSC. Validate the panel is at-home-eligible before promising it to the user."
+      - "If the user does not return the kit, you still owe them a UX (reorder or refund). Junction will surface a stalled state."
+
+  - id: labs-mobile-us-webhooks-baa
+    match:
+      use_case: labs
+      modality: mobile_phlebotomy
+      region: us
+      delivery: webhooks
+      compliance: hipaa_soc2_baa
+    api_surface: vital_api
+    api_surface_note: >
+      Mobile phlebotomy is a fulfillment option on the same order resource. Coverage matrix and scheduling are sub-resources.
+    recommended_sdk: "junction-node + Junction Web SDK for scheduling UI"
+    mermaid_template: |
+      flowchart LR
+        U[Your app] -- "1. check coverage" --> J[Junction Vital API]
+        U -- "2. create order + slot" --> J
+        J -- "3. dispatch phlebotomist" --> M[Mobile phlebotomy network]
+        M -- "4. draw + ship" --> L[Lab partner]
+        L -- "5. results" --> J
+        J -- "6. webhook" --> B[Your backend]
+    curl_snippets:
+      - label: "Check mobile phlebotomy coverage for an address"
+        code: |
+          curl -G https://api.junction.com/v1/order/coverage \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            --data-urlencode "zip=02139" \
+            --data-urlencode "fulfillment=mobile_phlebotomy"
+      - label: "Create the order with a scheduled slot"
+        code: |
+          curl -X POST https://api.junction.com/v1/order \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"user_id":"$USER_ID","panel":"cmp","fulfillment":"mobile_phlebotomy","slot_id":"$SLOT_ID"}'
+    compliance_checklist:
+      - "BAA in place before production PHI moves."
+      - "Surface the phlebotomist's ETA to the user; an unfilled mobile slot is the #1 support ticket."
+    gotchas:
+      - "Mobile phlebotomy carries a premium price; expose the cost before booking."
+      - "Coverage is metro-specific; do not promise national mobile coverage."
+      - "Same cancellation rules: POST /cancel, not DELETE."
+
+  # ---------- HYBRID / BOTH ----------
+  - id: both-hybrid-us-webhooks-baa
+    match:
+      use_case: both
+      modality: hybrid
+      region: us
+      delivery: webhooks
+      compliance: hipaa_soc2_baa
+    api_surface: both
+    api_surface_note: >
+      Wearables and labs both ride the Vital API for end-user data. The Org Management API is where you configure the two teams (sandbox + prod), webhook endpoints, and brand settings shared across both modalities.
+    recommended_sdk: "junction-node on the backend, Junction Web SDK for widget + scheduling, Mobile SDK if iOS/Android"
+    mermaid_template: |
+      flowchart LR
+        U[User] -- "wearables: widget" --> W[Link Widget]
+        U -- "labs: schedule" --> S[Your scheduling UI]
+        W --> J[Junction Vital API]
+        S --> J
+        J -- "wearables.data.received" --> B[Your backend]
+        J -- "labs.result.partial / final" --> B
+        B --> U
+    curl_snippets:
+      - label: "Create a user shared across modalities"
+        code: |
+          curl -X POST https://api.junction.com/v1/users \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"client_user_id":"user_42","region":"us"}'
+      - label: "Subscribe to both wearables and labs events"
+        code: |
+          curl -X POST https://api.junction.com/v1/webhooks \
+            -H "x-junction-mgmt-key: $JUNCTION_MGMT_KEY" \
+            -d '{"url":"https://api.yourapp.com/junction/webhook","events":["wearables.data.received","labs.result.partial","labs.result.final"]}'
+    compliance_checklist:
+      - "BAA scoped to both modalities."
+      - "Single dedupe table keyed on event id across all event types."
+      - "Audit logging covers connection events (wearables) and order events (labs)."
+    gotchas:
+      - "Two teams (sandbox, prod), not two orgs. Moving users between teams is not the happy path."
+      - "Webhook payload shape differs by event type; type-discriminate before parsing."
+
+  - id: both-hybrid-eu-eventhubs-hipaa
+    match:
+      use_case: both
+      modality: hybrid
+      region: eu
+      delivery: etl_eventhubs
+      compliance: hipaa
+    api_surface: both
+    api_surface_note: >
+      EU dual-modality build. ETL via Azure Event Hubs keeps the consumer in Azure-EU and avoids running a public HTTPS endpoint.
+    recommended_sdk: "junction-node + Azure Functions / .NET consumer on Event Hubs"
+    mermaid_template: |
+      flowchart LR
+        U[User EU] --> W[Link Widget EU]
+        U --> S[Scheduling UI EU]
+        W --> J[Junction EU / Vital API]
+        S --> J
+        J -- "publish" --> E[Azure Event Hubs]
+        E --> B[Your backend EU]
+    curl_snippets:
+      - label: "Configure Event Hubs ETL destination (EU)"
+        code: |
+          curl -X POST https://api.eu.junction.com/v1/etl/destinations \
+            -H "x-junction-mgmt-key: $JUNCTION_MGMT_KEY_EU" \
+            -d '{"type":"azure_event_hubs","namespace":"your-ns.servicebus.windows.net","hub":"junction"}'
+      - label: "Create an EU lab order"
+        code: |
+          curl -X POST https://api.eu.junction.com/v1/order \
+            -H "x-junction-api-key: $JUNCTION_API_KEY_EU" \
+            -d '{"user_id":"$USER_ID","panel":"lipid_panel","fulfillment":"psc","region":"eu"}'
+    compliance_checklist:
+      - "GDPR data-processing terms in place."
+      - "Azure subscription region pinned to EU."
+      - "No cross-region replication on the Event Hubs namespace."
+    gotchas:
+      - "EU panel coverage differs from US; do not assume parity."
+      - "Region is set on the user and on the keys; mismatches return 404 with little explanation."
+
+  # ---------- WEARABLES + CUSTOM LINK ----------
+  - id: wearables-customlink-us-webhooks-hipaa
+    match:
+      use_case: wearables
+      region: us
+      integration_pattern: custom_link_api
+      delivery: webhooks
+      compliance: hipaa
+    api_surface: vital_api
+    api_surface_note: >
+      Custom Link API gives you the connection primitives without the widget UI. Vital API still owns user, data, and webhooks.
+    recommended_sdk: "junction-node + your own connection UI (React or native)"
+    mermaid_template: |
+      flowchart LR
+        U[Your custom UI] -- "1. start connect" --> B[Your backend]
+        B -- "2. start session" --> J[Junction Vital API]
+        J -- "3. OAuth URL" --> U
+        U -- "4. provider OAuth" --> P[Provider]
+        P -- "5. callback" --> B
+        B -- "6. finalize" --> J
+        J -- "7. webhook on data" --> B
+    curl_snippets:
+      - label: "Start a custom-link session"
+        code: |
+          curl -X POST https://api.junction.com/v1/link/sessions \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"user_id":"$USER_ID","provider":"oura"}'
+      - label: "Finalize the session after OAuth callback"
+        code: |
+          curl -X POST https://api.junction.com/v1/link/sessions/$SESSION_ID/complete \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"code":"$OAUTH_CODE"}'
+    compliance_checklist:
+      - "Same HIPAA posture as the widget path."
+      - "Document why you cannot use the widget; reviewers will ask."
+    gotchas:
+      - "You now own provider-specific error states. Plan UI for revoked permissions, expired tokens, and connection limits."
+      - "Custom Link increases support volume; default to the widget unless you have a concrete UX requirement."
+
+  # ---------- LABS + EU ----------
+  - id: labs-inperson-eu-webhooks-baa
+    match:
+      use_case: labs
+      modality: in_person
+      region: eu
+      delivery: webhooks
+      compliance: hipaa_soc2_baa
+    api_surface: vital_api
+    api_surface_note: >
+      EU lab network differs from US; PSC coverage maps to local lab partners. Same order resource shape.
+    recommended_sdk: "junction-node + Junction Web SDK"
+    mermaid_template: |
+      flowchart LR
+        U[Your app EU] --> J[Junction EU / Vital API]
+        J --> L[EU lab partner]
+        L -- results --> J
+        J -- webhook --> B[Your backend EU]
+    curl_snippets:
+      - label: "Create an EU PSC order"
+        code: |
+          curl -X POST https://api.eu.junction.com/v1/order \
+            -H "x-junction-api-key: $JUNCTION_API_KEY_EU" \
+            -d '{"user_id":"$USER_ID","panel":"lipid_panel","fulfillment":"psc","region":"eu"}'
+      - label: "List available EU PSCs"
+        code: |
+          curl -G https://api.eu.junction.com/v1/order/locations \
+            -H "x-junction-api-key: $JUNCTION_API_KEY_EU" \
+            --data-urlencode "country=DE"
+    compliance_checklist:
+      - "GDPR data-processing terms; BAA equivalent where applicable."
+      - "Confirm the customer's clinical workflow accepts EU-issued reference ranges."
+    gotchas:
+      - "Reference ranges differ between US and EU labs. Normalize before charting."
+      - "Some panels are US-only; check before pitching."
+
+  # ---------- LABS + AT-HOME + EU ----------
+  - id: labs-athome-eu-webhooks-hipaa
+    match:
+      use_case: labs
+      modality: at_home
+      region: eu
+      delivery: webhooks
+      compliance: hipaa
+    api_surface: vital_api
+    api_surface_note: >
+      EU at-home kit availability is country-specific. Same order resource.
+    recommended_sdk: "junction-node"
+    mermaid_template: |
+      flowchart LR
+        U[Your app EU] --> J[Junction EU / Vital API]
+        J --> K[EU kit fulfillment]
+        K -- user returns --> L[EU lab]
+        L --> J
+        J -- webhook --> B[Your backend EU]
+    curl_snippets:
+      - label: "Check at-home kit availability by country"
+        code: |
+          curl -G https://api.eu.junction.com/v1/order/coverage \
+            -H "x-junction-api-key: $JUNCTION_API_KEY_EU" \
+            --data-urlencode "country=NL" \
+            --data-urlencode "fulfillment=at_home_kit"
+      - label: "Create an at-home order in NL"
+        code: |
+          curl -X POST https://api.eu.junction.com/v1/order \
+            -H "x-junction-api-key: $JUNCTION_API_KEY_EU" \
+            -d '{"user_id":"$USER_ID","panel":"hba1c","fulfillment":"at_home_kit","country":"NL"}'
+    compliance_checklist:
+      - "GDPR + country-level data rules apply on top of HIPAA-equivalent posture."
+      - "Customs delays exist for some at-home kits; surface to user."
+    gotchas:
+      - "Country availability is more important than region in EU."
+      - "Returning the kit cross-border is not always allowed; confirm during evaluation."
+
+  # ---------- WEARABLES + MOBILE + ETL ----------
+  - id: wearables-mobile-us-etlpubsub-baa
+    match:
+      use_case: wearables
+      region: us
+      integration_pattern: mobile_sdk
+      delivery: etl_pubsub
+      compliance: hipaa_soc2_baa
+    api_surface: vital_api
+    api_surface_note: >
+      Mobile SDK on the client, Pub/Sub on the backend, BAA scoped to PHI in transit and at rest.
+    recommended_sdk: "junction-ios + junction-android + GCP Pub/Sub consumer"
+    mermaid_template: |
+      flowchart LR
+        A[iOS/Android] --> H[HealthKit / Health Connect]
+        A --> B[Your backend]
+        B --> J[Junction Vital API]
+        J -- publish --> Q[Google Pub/Sub]
+        Q --> B
+        B --> A
+    curl_snippets:
+      - label: "Configure Pub/Sub destination"
+        code: |
+          curl -X POST https://api.junction.com/v1/etl/destinations \
+            -H "x-junction-mgmt-key: $JUNCTION_MGMT_KEY" \
+            -d '{"type":"google_pubsub","topic":"projects/your-proj/topics/junction"}'
+      - label: "Exchange SDK token"
+        code: |
+          curl -X POST https://api.junction.com/v1/users/sdk-session \
+            -H "x-junction-api-key: $JUNCTION_API_KEY" \
+            -d '{"sdk_token":"$SDK_TOKEN"}'
+    compliance_checklist:
+      - "BAA signed."
+      - "GCP project pinned to a US region."
+      - "On-device caching policy documented for Apple App Store review."
+    gotchas:
+      - "Pub/Sub message size limits; large daily-summary payloads can fragment."
+      - "Order subscriber ack so retries do not pile up during incidents."

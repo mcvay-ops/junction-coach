@@ -1,0 +1,356 @@
+entries:
+  # ---------- AUTH ----------
+  - id: auth-1
+    directAnswer: >
+      Org Management API is the control plane (teams, keys, brand, webhook config). Vital API is the application plane (users, wearables data, orders, results). If the customer's question is about their company's setup, it is Org Management. If it is about a user's data, it is Vital.
+    qualifyWhen:
+      - "Are you trying to change company-level config, or read user data?"
+      - "Do you already have keys for both, or just one set?"
+    escalateWhen:
+      p0: "Enterprise customer is blocked on production keys and threatening to miss launch."
+      p1: "Customer has the wrong key type wired up and a demo is in 24 hours."
+      p2: "Curious which key to start with for a future feature."
+    followUpTemplate: |
+      Recap: you wanted to do X, which is on the {Vital | Org Management} API. Docs: <link>.
+      Next step on my side: <action>. Next step on yours: <action>. I will follow up Wednesday.
+
+  - id: auth-2
+    directAnswer: >
+      Neither sandbox nor production keys belong on the client. Browser flows use a short-lived link token; mobile flows use the SDK's token exchange. The API key always stays on a server you control.
+    qualifyWhen:
+      - "Where do you currently store the key?"
+      - "Is this a web app, mobile app, or both?"
+    escalateWhen:
+      p0: "Production API key is in a public client bundle today. This is a security incident, not a feature request."
+      p1: "Customer is mid-build and wants to ship a key in a mobile binary by end of week."
+      p2: "Asking about best practice before they build."
+    followUpTemplate: |
+      Confirmed: the key never goes on the client. For your {web|mobile} flow use {link token | SDK token exchange}.
+      I have linked the relevant docs and the Quickstart. Open a thread if you hit an OAuth state error.
+
+  - id: auth-3
+    directAnswer: >
+      Issue the new key, deploy it alongside the old, switch traffic, revoke the old. Junction supports overlapping active keys so you can rotate without downtime.
+    qualifyWhen:
+      - "How often do you rotate today?"
+      - "Is this routine rotation or incident response?"
+    escalateWhen:
+      p0: "Live key compromise. Treat as an incident with security on the call."
+      p1: "Quarterly rotation deadline this week and the runbook is unclear."
+      p2: "Building the runbook for the first time."
+    followUpTemplate: |
+      Sent: rotation runbook + the dashboard URL for issuing a second active key.
+      Confirm when you have switched traffic and I will close the loop with you on revoking the old key.
+
+  - id: auth-4
+    directAnswer: >
+      No. Keys, base URLs, and data are region-scoped. US users live in the US, EU users live in the EU. Multi-region products run two integrations.
+    qualifyWhen:
+      - "Do you have users in both regions today, or is this a future requirement?"
+      - "Does your backend run in both regions, or just one?"
+    escalateWhen:
+      p0: "Customer is using a US key to read EU user data in production. Compliance issue."
+      p1: "Launch in EU next week and the dual-region pattern is not built yet."
+      p2: "Future-state question while scoping."
+    followUpTemplate: |
+      Dual-region pattern: two key sets, two base URLs, one routing decision in your app layer. Docs linked.
+      I will check in next Tuesday on the EU launch readiness.
+
+  # ---------- WEBHOOKS ----------
+  - id: web-1
+    directAnswer: >
+      Any 2xx inside the timeout window. Junction does not look at the body. Ack first, process after.
+    qualifyWhen:
+      - "What does your handler do before responding?"
+      - "Do you have a queue between the endpoint and the work?"
+    escalateWhen:
+      p0: "Production handler is timing out and events are being parked at scale."
+      p1: "Customer is seeing duplicate processing because their handler is slow."
+      p2: "Asking before they build."
+    followUpTemplate: |
+      Pattern: 200 first, queue the payload, process asynchronously.
+      I sent the retry-policy doc and a sample idempotent handler. Ping me if duplicates persist.
+
+  - id: web-2
+    directAnswer: >
+      Non-2xx and timeouts trigger exponential-backoff retries with a bounded attempt count. Parked events are replayable. Handlers must be idempotent.
+    qualifyWhen:
+      - "Are you seeing retries that you did not expect?"
+      - "Is your handler keyed off the event id?"
+    escalateWhen:
+      p0: "Backlog of parked events blocking a customer report."
+      p1: "Retries causing duplicate orders in production."
+      p2: "Designing for retries before launch."
+    followUpTemplate: |
+      Confirmed retry behavior. Idempotency snippet attached.
+      If retries continue, share three event ids and I will trace through the dashboard with you.
+
+  - id: web-3
+    directAnswer: >
+      Use the event id as the primary key in a dedupe table or Redis SETNX. Insert first; if you collide, return 200 immediately.
+    qualifyWhen:
+      - "What store are you using for dedupe today?"
+      - "How long is your dedupe window?"
+    escalateWhen:
+      p0: "Production has double-charged users because of duplicates."
+      p1: "Reports show duplicates and they are about to demo."
+      p2: "Designing the dedupe layer."
+    followUpTemplate: |
+      Recommended: event id as the dedupe key, 7-day window minimum. Snippet attached.
+      Confirm once deployed and I will close the loop on the duplicate report.
+
+  - id: web-4
+    directAnswer: >
+      Webhooks for low-volume, low-latency, when you own the endpoint. ETL pipelines (Pub/Sub, RabbitMQ, Event Hubs) for high volume or when you do not want to run a public HTTPS endpoint.
+    qualifyWhen:
+      - "What is your expected event volume per day?"
+      - "Do you already run a message bus internally?"
+    escalateWhen:
+      p0: "Customer is at scale and webhooks are causing reliability incidents."
+      p1: "Architecture decision blocking their sprint."
+      p2: "Comparing options for a future migration."
+    followUpTemplate: |
+      Recommended: {webhooks | ETL via X} because of {volume, existing infra, latency need}.
+      I sent the ETL overview and a sample consumer for your bus.
+
+  - id: web-5
+    directAnswer: >
+      Treat partial results as a state transition. Store and label them, but wait for the final-results event before triggering downstream workflows.
+    qualifyWhen:
+      - "Are you subscribing to both partial and final events?"
+      - "Is your UI showing 'pending' between partial and final?"
+    escalateWhen:
+      p0: "Clinician is acting on partials as if they were final."
+      p1: "UX bug surfaced by a customer demo."
+      p2: "Scoping the result-handling flow."
+    followUpTemplate: |
+      Pattern: subscribe to partial + final, latest wins. UI labels both. Docs attached.
+      I will follow up after your next demo.
+
+  - id: web-6
+    directAnswer: >
+      Three usual causes: timeout returning 200 too late, edge returning 200 before app, multiple subscriptions to the same event. Walk the logs in that order.
+    qualifyWhen:
+      - "Where is the 200 returned from? CDN, load balancer, application?"
+      - "How many webhook endpoints are subscribed in the dashboard?"
+    escalateWhen:
+      p0: "Duplicates causing user-facing double notifications."
+      p1: "Customer escalating because their on-call is paged repeatedly."
+      p2: "Investigating during build."
+    followUpTemplate: |
+      Trace plan: 1) confirm subscriptions, 2) confirm response source, 3) measure timing.
+      Send me three duplicate event ids and I will trace in the dashboard with you.
+
+  # ---------- WEARABLES ----------
+  - id: wear-1
+    directAnswer: >
+      Link Widget for cloud providers in a browser. Mobile SDK + HealthKit / Health Connect for on-device. iOS apps that want Apple Watch coverage need the Mobile SDK; the widget does not reach HealthKit.
+    qualifyWhen:
+      - "Do you have a native iOS or Android app today?"
+      - "Are you targeting Apple Watch / Garmin specifically, or cloud providers broadly?"
+    escalateWhen:
+      p0: "Customer announced an Apple Health integration to their users and has the wrong architecture in production."
+      p1: "Mobile launch in two weeks, no SDK integration yet."
+      p2: "Scoping a future mobile expansion."
+    followUpTemplate: |
+      Path: {Link Widget | Mobile SDK | both}. I sent the integration guide and the HealthKit checklist.
+      Confirm Mobile SDK targets and I will sanity-check the Info.plist strings.
+
+  - id: wear-2
+    directAnswer: >
+      Use the Custom Link API when you need full control over the connection UI, want to A/B test it, or have a native experience the widget cannot match. Default to the widget.
+    qualifyWhen:
+      - "What about the widget UX is blocking you?"
+      - "Have you tested the widget with real users?"
+    escalateWhen:
+      p0: "Customer started building custom and is now blocked on a provider-specific OAuth edge case in production."
+      p1: "Architecture choice blocking sprint planning."
+      p2: "Curious about the option for a future redesign."
+    followUpTemplate: |
+      Recommended: {widget | custom}. Reasoning: {specific UX requirement}.
+      Sent the Custom Link API guide and the provider-error matrix.
+
+  - id: wear-3
+    directAnswer: >
+      Junction supports the major cloud providers and Apple HealthKit / Health Connect via SDK. Data type coverage is provider-dependent; check the provider matrix before promising a specific metric.
+    qualifyWhen:
+      - "Which metrics are non-negotiable for your product?"
+      - "Are you OK degrading to 'unavailable' per provider?"
+    escalateWhen:
+      p0: "Customer's launch hinges on a metric that no provider returns."
+      p1: "Sales motion needs the matrix for a deck this week."
+      p2: "Scoping early."
+    followUpTemplate: |
+      Provider matrix attached. Metric availability: {summary}.
+      I will flag any provider changes I see; check the docs page before each release.
+
+  - id: wear-4
+    directAnswer: >
+      Provider-dependent. Most cloud providers return 30 to 90 days at connection time. Apple HealthKit can return years. Treat the backfill window as a per-provider answer, not a constant.
+    qualifyWhen:
+      - "What is the minimum history your product needs on day one?"
+      - "Are you OK with the user seeing 'no data yet' for the first 24 hours?"
+    escalateWhen:
+      p0: "Customer demo promised a year of history and the provider returns 30 days."
+      p1: "Onboarding UX broken by an empty backfill."
+      p2: "Designing the day-one experience."
+    followUpTemplate: |
+      Sent: per-provider backfill matrix. Recommendation for your case: {specific}.
+      Add an onboarding empty state; users will see one for cloud providers.
+
+  # ---------- LABS ----------
+  - id: labs-1
+    directAnswer: >
+      Match modality to the user. PSC is cheap and broad. At-home is convenient and narrower. Mobile phlebotomy is premium and metro-bound. Start with one, add a second when a cohort blocks on it.
+    qualifyWhen:
+      - "Who is your user (consumer, employee, patient)?"
+      - "What is your unit economics tolerance per draw?"
+    escalateWhen:
+      p0: "Enterprise customer's RFP requires a modality you do not have today."
+      p1: "Pricing meeting blocked on modality decision."
+      p2: "Roadmapping a future modality."
+    followUpTemplate: |
+      Recommended modality: {one}. Reasoning: {user profile + unit economics}.
+      Sent the modality overview and coverage map.
+
+  - id: labs-2
+    directAnswer: >
+      POST a cancellation. Junction's API design treats cancel as a Custom RPC, not a DELETE. The shape is POST /orders/{id}/cancel and the response tells you whether you were in time.
+    qualifyWhen:
+      - "What stage is the order in when you are trying to cancel?"
+      - "Are you seeing a 405 or a different error?"
+    escalateWhen:
+      p0: "Customer is double-billing because cancel is failing in production."
+      p1: "Cancel works in sandbox but fails in production; demo tomorrow."
+      p2: "Documenting cancel behavior for their team."
+    followUpTemplate: |
+      Cancel is POST, not DELETE. Linked the API design guideline and the endpoint.
+      If you still hit a 405, share the request id and I will trace it.
+
+  - id: labs-3
+    directAnswer: >
+      Created → accepted → collected → received → in process → resulted (partial, then final). Build your UI around states, not booleans. Most issues come from checking status == 'resulted' and missing partials.
+    qualifyWhen:
+      - "Which states are you rendering in the UI today?"
+      - "Are you handling partial-result events?"
+    escalateWhen:
+      p0: "Production is dropping users at 'resulted' that should be at 'partial' on the UI."
+      p1: "Customer demo shows the wrong status to a clinician."
+      p2: "Designing the state machine."
+    followUpTemplate: |
+      State diagram attached. Partial vs. final behavior documented.
+      Send me one order id and I will walk you through the events end to end.
+
+  - id: labs-4
+    directAnswer: >
+      Junction maps vendor markers to a normalized identifier with unit conversion. You receive both raw and normalized. Use normalized for analytics, raw for clinician hand-off.
+    qualifyWhen:
+      - "Are you charting per-user trends across labs?"
+      - "Does the clinician need the original lab report?"
+    escalateWhen:
+      p0: "Clinician is acting on the wrong unit because the customer rendered raw."
+      p1: "Trend graph broken because the customer mixed raw and normalized."
+      p2: "Designing the data model."
+    followUpTemplate: |
+      Use normalized for charts, raw for clinician export. Docs linked.
+      If you see a marker you cannot map, send the LOINC and I will check coverage.
+
+  - id: labs-5
+    directAnswer: >
+      Default no. For enterprise with an existing lab relationship, raise it during evaluation and we will scope it. Not self-serve.
+    qualifyWhen:
+      - "Why does the customer need their own lab?"
+      - "Is this a deal-blocker or a preference?"
+    escalateWhen:
+      p0: "Enterprise deal closes only with BYOL."
+      p1: "Evaluation stuck on the BYOL question."
+      p2: "Curious about the option."
+    followUpTemplate: |
+      Logged the BYOL request with AE. I will come back with scope and timeline.
+      In the meantime, let me know which panel coverage is missing from the managed network.
+
+  # ---------- COMPLIANCE ----------
+  - id: comp-1
+    directAnswer: >
+      Junction signs a BAA for production PHI handling. Sandbox does not permit PHI, so no BAA is required to start. BAA is typically signed alongside the production contract.
+    qualifyWhen:
+      - "Are you in sandbox or about to go to production?"
+      - "Has your legal team reviewed the standard BAA template?"
+    escalateWhen:
+      p0: "Customer wants to push PHI through sandbox today."
+      p1: "Production launch blocked on BAA signature."
+      p2: "Asking about the process for a future production move."
+    followUpTemplate: |
+      Confirmed: BAA at production, not sandbox. Sent the standard template.
+      Loop me in when legal has comments; I will route to the right team.
+
+  - id: comp-2
+    directAnswer: >
+      Junction holds HIPAA and SOC 2 Type II. The customer is still responsible for their own app: display, access control, audit, key handling. Shared responsibility, not transfer.
+    qualifyWhen:
+      - "What is your own compliance posture today?"
+      - "Are you mapping responsibilities for an internal review?"
+    escalateWhen:
+      p0: "Customer is claiming they 'are HIPAA' because they integrate with Junction, in a contract."
+      p1: "Compliance review blocking a procurement timeline."
+      p2: "Building the internal compliance doc."
+    followUpTemplate: |
+      Sent the shared-responsibility breakdown and Junction's compliance summary.
+      Happy to join your security review call if useful.
+
+  - id: comp-3
+    directAnswer: >
+      User PHI stays in the user's region. Operational metadata may cross in narrow, documented cases. Pitch it as "PHI stays in region; here are the exceptions," not a blanket claim.
+    qualifyWhen:
+      - "What is the data-residency requirement, specifically?"
+      - "Is the customer asking for PHI residency or all data residency?"
+    escalateWhen:
+      p0: "Customer's contract requires zero cross-region traffic of any kind."
+      p1: "Procurement asking for the documented exceptions list this week."
+      p2: "General compliance question."
+    followUpTemplate: |
+      Sent the residency summary and the exceptions doc.
+      If the contract is strict, loop me in with legal and the AE.
+
+  # ---------- ARCHITECTURE ----------
+  - id: arch-1
+    directAnswer: >
+      Org is the company. Team is the unit where keys, webhooks, and brand attach (usually one team per environment). User is the end-user. Order is a single request tied to a user. Plan team structure early.
+    qualifyWhen:
+      - "Sandbox and production as separate teams, yes?"
+      - "Do you have multiple product lines that need separate brand or webhooks?"
+    escalateWhen:
+      p0: "Customer wants to move thousands of production users between teams."
+      p1: "Team-structure choice blocking a sprint."
+      p2: "Scoping the structure for the first time."
+    followUpTemplate: |
+      Recommended: {team layout}. Reasoning: {environment vs. product line split}.
+      Sent the hierarchy diagram.
+
+  - id: arch-2
+    directAnswer: >
+      Cursor for any feed or growing dataset. Offset only for small, stable lists. The API design guidelines are explicit. Pass next_cursor back unchanged.
+    qualifyWhen:
+      - "Which endpoint are you paginating?"
+      - "Are you seeing missed or duplicated rows?"
+    escalateWhen:
+      p0: "Customer's report is missing rows because of offset pagination under concurrent writes."
+      p1: "Customer's data team is rebuilding their pipeline on the wrong pagination."
+      p2: "Asking before they build."
+    followUpTemplate: |
+      Use cursor on {endpoint}. Sent the API design guideline.
+      If rows are still missing, send a query window and I will trace.
+
+  - id: arch-3
+    directAnswer: >
+      Mobile SDK on iOS and Android. Backend holds the API keys and proxies privileged calls. Webhook receiver for results. That is the minimum.
+    qualifyWhen:
+      - "iOS only, Android only, or both?"
+      - "Do you already have a backend that can hold secrets?"
+    escalateWhen:
+      p0: "Customer is trying to put the API key in a mobile binary, blocking launch."
+      p1: "Mobile-first product, no backend, demo in a week."
+      p2: "Architecture scoping early."
+    followUpTemplate: |
+      Minimum integration: Mobile SDK + thin backend + webhook receiver. Diagram attached.
+      I will check in once you have a backend endpoint and the SDK linked.
