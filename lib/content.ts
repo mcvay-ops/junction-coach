@@ -1,14 +1,7 @@
 import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
-import type {
-  Question,
-  PlaybookEntry,
-  Taxonomy,
-  TaxonomyLeaf,
-  CoachInputs,
-  CoachOutput,
-} from "./types";
+import type { Question, PlaybookEntry, Taxonomy } from "./types";
 
 const CONTENT_DIR = path.join(process.cwd(), "content");
 
@@ -52,46 +45,4 @@ export function getTaxonomy(): Taxonomy {
   if (_taxonomy) return _taxonomy;
   _taxonomy = loadYaml<Taxonomy>("taxonomy.yaml");
   return _taxonomy;
-}
-
-function leafScore(leaf: TaxonomyLeaf, inputs: CoachInputs): number {
-  let score = 0;
-  let total = 0;
-  (Object.keys(leaf.match) as (keyof CoachInputs)[]).forEach((k) => {
-    total += 1;
-    if (leaf.match[k] === inputs[k]) score += 1;
-  });
-  // weight by match-ratio so partial-match leaves still win over no-match
-  return total === 0 ? 0 : score / total + score * 0.001;
-}
-
-export function pickLeaf(inputs: CoachInputs): TaxonomyLeaf {
-  const tax = getTaxonomy();
-  let best: TaxonomyLeaf | null = null;
-  let bestScore = -1;
-  for (const leaf of tax.leaves) {
-    const s = leafScore(leaf, inputs);
-    if (s > bestScore) {
-      bestScore = s;
-      best = leaf;
-    }
-  }
-  if (!best) {
-    throw new Error("No taxonomy leaves defined");
-  }
-  return best;
-}
-
-export function buildOutput(inputs: CoachInputs): CoachOutput {
-  const leaf = pickLeaf(inputs);
-  return {
-    leafId: leaf.id,
-    apiSurface: leaf.api_surface,
-    apiSurfaceNote: leaf.api_surface_note,
-    recommendedSdk: leaf.recommended_sdk,
-    mermaid: leaf.mermaid_template,
-    curl: leaf.curl_snippets,
-    complianceChecklist: leaf.compliance_checklist,
-    gotchas: leaf.gotchas,
-  };
 }

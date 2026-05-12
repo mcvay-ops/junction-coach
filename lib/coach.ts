@@ -4,6 +4,8 @@ import type {
   Compliance,
   Delivery,
   IntegrationPattern,
+  MatchField,
+  MatchInfo,
   Modality,
   Region,
   Taxonomy,
@@ -109,6 +111,33 @@ export function fillInputs(partial: Partial<CoachInputs>): CoachInputs {
   };
 }
 
+const INPUT_KEYS: (keyof CoachInputs)[] = [
+  "use_case",
+  "modality",
+  "region",
+  "integration_pattern",
+  "delivery",
+  "compliance",
+];
+
+export function describeMatch(leaf: TaxonomyLeaf, inputs: CoachInputs): MatchInfo {
+  const fields: MatchField[] = INPUT_KEYS.map((key) => {
+    const leafValue = leaf.match[key];
+    const userValue = inputs[key];
+    if (leafValue === undefined) {
+      return { key, userValue, status: "unconstrained" };
+    }
+    return {
+      key,
+      userValue,
+      leafValue,
+      status: leafValue === userValue ? "match" : "mismatch",
+    };
+  });
+  const exact = fields.every((f) => f.status !== "mismatch");
+  return { exact, fields };
+}
+
 export function buildCoachOutput(inputs: CoachInputs, taxonomy: Taxonomy): CoachOutput {
   const leaf = pickLeaf(taxonomy, inputs);
   return {
@@ -120,5 +149,64 @@ export function buildCoachOutput(inputs: CoachInputs, taxonomy: Taxonomy): Coach
     curl: leaf.curl_snippets,
     complianceChecklist: leaf.compliance_checklist,
     gotchas: leaf.gotchas,
+    match: describeMatch(leaf, inputs),
   };
+}
+
+const SURFACE_LABEL_MD: Record<CoachOutput["apiSurface"], string> = {
+  vital_api: "Vital API (application plane)",
+  org_management_api: "Org Management API (control plane)",
+  both: "Vital API + Org Management API",
+};
+
+export function outputToMarkdown(inputs: CoachInputs, output: CoachOutput): string {
+  const inputLines = INPUT_KEYS.filter((k) => inputs[k] && inputs[k] !== "na")
+    .map((k) => `- **${k.replace(/_/g, " ")}**: ${String(inputs[k]).replace(/_/g, " ")}`)
+    .join("\n");
+
+  const curlBlocks = output.curl
+    .map((s) => `### ${s.label}\n\n\`\`\`bash\n${s.code.trim()}\n\`\`\``)
+    .join("\n\n");
+
+  const checklist = output.complianceChecklist.map((i) => `- [ ] ${i}`).join("\n");
+  const gotchas = output.gotchas.map((i) => `- ${i}`).join("\n");
+
+  const matchNote = output.match.exact
+    ? `Exact taxonomy match: \`${output.leafId}\`.`
+    : `Closest taxonomy match: \`${output.leafId}\` (no leaf matched every input exactly). Differed on: ${output.match.fields
+        .filter((f) => f.status === "mismatch")
+        .map((f) => `${f.key} (leaf=${f.leafValue}, you=${f.userValue})`)
+        .join(", ")}.`;
+
+  return `# Junction integration recommendation
+
+${matchNote}
+
+## Inputs
+${inputLines}
+
+## Architecture
+
+\`\`\`mermaid
+${output.mermaid.trim()}
+\`\`\`
+
+## API surface
+**${SURFACE_LABEL_MD[output.apiSurface]}**
+
+${output.apiSurfaceNote.trim()}
+
+## Recommended SDK
+${output.recommendedSdk}
+
+## curl snippets
+
+${curlBlocks}
+
+## Compliance checklist
+${checklist}
+
+## Gotchas
+${gotchas}
+`;
 }

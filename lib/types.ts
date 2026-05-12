@@ -82,6 +82,20 @@ export interface Taxonomy {
   leaves: TaxonomyLeaf[];
 }
 
+export type MatchStatus = "match" | "mismatch" | "unconstrained";
+
+export interface MatchField {
+  key: keyof CoachInputs;
+  userValue: string;
+  leafValue?: string;
+  status: MatchStatus;
+}
+
+export interface MatchInfo {
+  exact: boolean;
+  fields: MatchField[];
+}
+
 export interface CoachOutput {
   leafId: string;
   apiSurface: ApiSurface;
@@ -91,4 +105,5 @@ export interface CoachOutput {
   curl: { label: string; code: string }[];
   complianceChecklist: string[];
   gotchas: string[];
+  match: MatchInfo;
 }

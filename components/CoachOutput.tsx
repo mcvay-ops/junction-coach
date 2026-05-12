@@ -1,9 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Check, Copy } from "lucide-react";
 import { MermaidDiagram } from "./MermaidDiagram";
-import type { CoachOutput } from "@/lib/types";
+import {
+  BulletList,
+  Checklist,
+  CopyMarkdownButton,
+  CurlBlock,
+  MatchBanner,
+} from "./CoachOutputParts";
+import { outputToMarkdown } from "@/lib/coach";
+import type { CoachInputs, CoachOutput } from "@/lib/types";
 
 const SURFACE_LABEL: Record<CoachOutput["apiSurface"], string> = {
   vital_api: "Vital API (application plane)",
@@ -11,9 +17,21 @@ const SURFACE_LABEL: Record<CoachOutput["apiSurface"], string> = {
   both: "Vital API + Org Management API",
 };
 
-export function CoachOutputView({ output }: { output: CoachOutput }) {
+export function CoachOutputView({
+  output,
+  inputs,
+}: {
+  output: CoachOutput;
+  inputs: CoachInputs;
+}) {
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <CopyMarkdownButton markdown={outputToMarkdown(inputs, output)} />
+      </div>
+
+      <MatchBanner match={output.match} leafId={output.leafId} />
+
       <section className="card">
         <header className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
@@ -55,87 +73,6 @@ export function CoachOutputView({ output }: { output: CoachOutput }) {
         <Checklist title="Compliance checklist" items={output.complianceChecklist} />
         <BulletList title="Gotchas" items={output.gotchas} />
       </section>
-    </div>
-  );
-}
-
-function CurlBlock({ label, code }: { label: string; code: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(code.trim());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
-  };
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between">
-        <p className="text-xs font-semibold text-ink-700 dark:text-ink-200">{label}</p>
-        <button
-          onClick={copy}
-          className="inline-flex items-center gap-1 text-[11px] text-ink-500 hover:text-accent"
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-      <pre className="code-block whitespace-pre-wrap">{code.trim()}</pre>
-    </div>
-  );
-}
-
-function Checklist({ title, items }: { title: string; items: string[] }) {
-  const [checked, setChecked] = useState<Set<number>>(new Set());
-  const toggle = (i: number) =>
-    setChecked((s) => {
-      const next = new Set(s);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
-      return next;
-    });
-  return (
-    <div className="card">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
-        {title}
-      </h3>
-      <ul className="flex flex-col gap-2">
-        {items.map((it, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm">
-            <button
-              onClick={() => toggle(i)}
-              className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border ${
-                checked.has(i)
-                  ? "border-accent bg-accent text-white"
-                  : "border-ink-300 dark:border-ink-700"
-              }`}
-              aria-label={checked.has(i) ? "Uncheck" : "Check"}
-            >
-              {checked.has(i) && <Check size={10} />}
-            </button>
-            <span className={checked.has(i) ? "text-ink-400 line-through" : ""}>
-              {it}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function BulletList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="card">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
-        {title}
-      </h3>
-      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
-        {items.map((it, i) => (
-          <li key={i}>{it}</li>
-        ))}
-      </ul>
     </div>
   );
 }
